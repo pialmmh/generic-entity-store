@@ -2,6 +2,8 @@ package com.telcobright.db.genericentity.core;
 
 import com.telcobright.db.genericentity.api.IEntityTypeSet;
 import com.telcobright.db.genericentity.core.impl.ConverterGenerator;
+import com.telcobright.db.genericentity.core.validation.DateTypeValidator;
+import com.telcobright.db.genericentity.core.analysis.FieldTypeAnalyzer;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -24,6 +26,7 @@ public class EntityRegistry<T extends IEntityTypeSet> {
     private final Map<T, Class<?>> entityClasses = new HashMap<>();
     private final Map<T, Integer> maxCounts = new HashMap<>();
     private final ConverterGenerator generator = new ConverterGenerator();
+    private final FieldTypeAnalyzer fieldAnalyzer = new FieldTypeAnalyzer();
     
     // Set of supported types by the GenericEntity storage
     private static final Set<Class<?>> SUPPORTED_TYPES = new HashSet<>();
@@ -84,8 +87,14 @@ public class EntityRegistry<T extends IEntityTypeSet> {
      * Validates all field types are supported
      */
     public void register(T entityType, Class<?> entityClass, int maxCount) {
+        // Validate date types - only LocalDateTime and Timestamp allowed
+        DateTypeValidator.validateEntityClass(entityClass);
+        
         // Validate all field types before registration
         validateEntityClass(entityClass);
+        
+        // Analyze field types for optimization
+        fieldAnalyzer.analyzeEntity(entityClass, entityType);
         
         EntityConverter converter = generator.generateConverter(entityClass);
         converters.put(entityType, converter);
@@ -320,6 +329,28 @@ public class EntityRegistry<T extends IEntityTypeSet> {
      */
     public boolean isRegistered(T entityType) {
         return converters.containsKey(entityType);
+    }
+    
+    /**
+     * Gets the field type analysis report
+     * Shows optimal GenericEntity size based on registered entities
+     */
+    public FieldTypeAnalyzer.AnalysisReport getFieldAnalysisReport() {
+        return fieldAnalyzer.getReport();
+    }
+    
+    /**
+     * Gets the optimal entity size based on field analysis
+     */
+    public FieldTypeAnalyzer.EntitySize getOptimalEntitySize() {
+        return fieldAnalyzer.determineOptimalSize();
+    }
+    
+    /**
+     * Gets total max count across all registered entities
+     */
+    public int getTotalMaxCount() {
+        return maxCounts.values().stream().mapToInt(Integer::intValue).sum();
     }
     
     /**
